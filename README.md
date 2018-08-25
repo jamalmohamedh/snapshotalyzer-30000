@@ -1,2 +1,2 @@
 # snapshotalyzer-30000
-Demo prooject to maintain AWS EC2 instances and Snapshot
+Demo project to maintain AWS EC2 instances and Snapshot
