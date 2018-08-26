@@ -1,4 +1,5 @@
 import boto3
+import botocore
 import click
 
 session = boto3.Session(profile_name='jammy')
@@ -13,6 +14,11 @@ def filter_instances(project):
     else:
         instances = ec2.instances.all()
     return instances
+
+def has_pending_snapshot(volume):
+    snapshots = list(volume.snapshots.all())
+    return snapshots and snapshots[0].state == 'pending'
+
 @click.group()
 def cli():
     """Jammy manages Snapshot"""
@@ -23,7 +29,8 @@ def snapshots():
 
 @snapshots.command('list')
 @click.option('--project', default=None, help="Only snapshots for project (tag Project:<name>)")
-def list_volumes(project):
+@click.option('--all', 'list_all', default=False, is_flag=True, help="List all snapshots for volumes")
+def list_snapshots(project, list_all):
     "List EC2 Snapshots"
 
     instances = filter_instances(project)
@@ -39,6 +46,8 @@ def list_volumes(project):
                     s.state,
                     s.start_time.strftime("%c")
                 )))
+
+                if s.state == 'completed'and not list_all: break
     return
 
 
@@ -82,6 +91,9 @@ def create_snapshots(project):
         i.wait_until_stopped()
 
         for v in i.volumes.all():
+            if has_pending_snapshot(v):
+                print( "skipping {0}, Snapshot already in progress ".format(v.id))
+                continue
             print("  Creating snapshot of {0}".format(v.id))
             v.create_snapshot(Description="Created for snapshotalyzer-30000")
 
@@ -122,7 +134,11 @@ def stop_instances(project):
 
     for i in instances:
         print("Stopping{0}...".format(i.id))
-        i.stop()
+        try:
+            i.stop()
+        except botocore.exceptions.CLientError as e:
+            print(" couldn't stop{0} ".format(i.id) +str(e))
+            continue
 
     return
 
@@ -135,7 +151,11 @@ def stop_instances(project):
 
     for i in instances:
         print("Starting{0}...".format(i.id))
-        i.start()
+        try:
+            i.start()
+        except botocore.exceptions.CLientError as e:
+            print(" couldn't start{0} ".format(i.id) +str(e))
+            continue
 
     return
 
